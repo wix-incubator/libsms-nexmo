@@ -23,8 +23,6 @@ class NexmoSmsGateway(requestFactory: HttpRequestFactory,
                            credentials: Credentials) extends SmsGateway {
   private val responseParser = new ResponseParser
 
-  override def getId: String = NexmoSmsGateway.id
-
   override def sendPlain(sender: Sender, destPhone: String, text: String): Try[String] = {
     Try {
       val params = NexmoHelper.createRequestParams(
@@ -61,6 +59,10 @@ class NexmoSmsGateway(requestFactory: HttpRequestFactory,
     }
   }
 
+  override def sendUnicode(sender: Sender, destPhone: String, text: String): Try[String] = {
+    ???
+  }
+
   private def extractAndCloseResponse(httpResponse: HttpResponse): String = {
     try {
       httpResponse.parseAsString()
@@ -68,8 +70,4 @@ class NexmoSmsGateway(requestFactory: HttpRequestFactory,
       httpResponse.ignore()
     }
   }
-}
-
-object NexmoSmsGateway {
-  val id = "com.nexmo"
 }

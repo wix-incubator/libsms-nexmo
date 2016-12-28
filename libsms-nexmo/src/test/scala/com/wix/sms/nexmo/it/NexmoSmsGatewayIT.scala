@@ -42,12 +42,6 @@ class NexmoSmsGatewayIT extends SpecWithJUnit {
     driver.resetProbe()
   }
 
-  "getId" should {
-    "return the ID" in new Ctx {
-      nexmo.getId must beEqualTo(NexmoSmsGateway.id)
-    }
-  }
-
   "sendPlain" should {
     "successfully yield a message ID on valid request" in new Ctx {
       driver.anSmsFor(
