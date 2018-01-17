@@ -1,31 +1,39 @@
 package com.wix.sms.nexmo.testkit
 
+import java.util.concurrent.atomic.AtomicReference
 import java.util.{List => JList}
 
+import akka.http.scaladsl.model._
 import com.google.api.client.http.UrlEncodedParser
-import com.wix.hoopoe.http.testkit.EmbeddedHttpProbe
+import com.wix.e2e.http.RequestHandler
+import com.wix.e2e.http.client.extractors.HttpMessageExtractors._
+import com.wix.e2e.http.server.WebServerFactory.aMockWebServerWith
 import com.wix.sms.model.Sender
 import com.wix.sms.nexmo.model.{Message, Response, ResponseParser, Statuses}
 import com.wix.sms.nexmo.{Credentials, NexmoHelper}
-import spray.http._
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable
 
 class NexmoDriver(port: Int) {
-  private val probe = new EmbeddedHttpProbe(port, EmbeddedHttpProbe.NotFoundHandler)
+  private val delegatingHandler: RequestHandler = { case r: HttpRequest => handler.get().apply(r) }
+  private val notFoundHandler: RequestHandler = { case _: HttpRequest => HttpResponse(status = StatusCodes.NotFound) }
+
+  private val handler = new AtomicReference(notFoundHandler)
+
+  private val probe = aMockWebServerWith(delegatingHandler).onPort(port).build
   private val responseParser = new ResponseParser
 
   def startProbe() {
-    probe.doStart()
+    probe.start()
   }
 
   def stopProbe() {
-    probe.doStop()
+    probe.stop()
   }
 
   def resetProbe() {
-    probe.handlers.clear()
+    handler.set(notFoundHandler)
   }
 
   def anSmsFor(credentials: Credentials, sender: Sender, destPhone: String, text: String): SmsCtx = {
@@ -35,6 +43,9 @@ class NexmoDriver(port: Int) {
       destPhone = destPhone,
       text = text)
   }
+
+  private def prependHandler(handle: RequestHandler) =
+    handler.set(handle orElse handler.get())
 
   class SmsCtx(credentials: Credentials, sender: Sender, destPhone: String, text: String) {
     private val expectedParams = NexmoHelper.createRequestParams(
@@ -82,7 +93,7 @@ class NexmoDriver(port: Int) {
     }
 
     private def returnJson(responseJson: String): Unit = {
-      probe.handlers += {
+      prependHandler({
         case HttpRequest(
         HttpMethods.POST,
         Uri.Path("/sms/json"),
@@ -92,11 +103,11 @@ class NexmoDriver(port: Int) {
           status = StatusCodes.BadRequest,
           entity = HttpEntity(ContentTypes.`application/json`, responseJson)
         )
-      }
+      })
     }
 
     private def isStubbedRequestEntity(entity: HttpEntity): Boolean = {
-      val requestParams = urlDecode(entity.asString)
+      val requestParams = urlDecode(entity.extractAsString)
 
       requestParams == expectedParams
     }
